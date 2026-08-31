@@ -531,29 +531,24 @@ tl.push({ timeline: body, conditional_function: ()=> !DECLINED });
    are never written out; they get a marker file instead, so a withdrawal is still auditable. */
 function csvEscape(v){ return `"${String(v === null || v === undefined ? '' : v).replace(/"/g,'""')}"`; }
 function withdrawalRecordCsv(){
-  const cols = ['subject','volunteer_id','domain','withdrawn','withdrawn_date'];
-  const vals = [SUBJECT, PID, DOMAIN, 1, new Date().toISOString().slice(0,10)];
+  const cols = ['subject','domain','withdrawn','withdrawn_date'];
+  const vals = [SUBJECT, DOMAIN, 1, new Date().toISOString().slice(0,10)];
   return cols.map(csvEscape).join(',') + '\n' + vals.map(csvEscape).join(',') + '\n';
 }
-/* Columns dropped before export. `stimulus` holds the full HTML of every screen, including the
-   consent text and the entire review of every item, which quintuples the file and duplicates
-   information already present in structured columns. The rest are jsPsych internals or duplicates.
-   Nothing identifying is collected in the first place: no IP (a browser cannot read its own),
-   no user agent, no screen size, and no wall-clock timestamp finer than the session date. */
+/* Only raw, irreplaceable fields are exported. Everything that can be recomputed - correctness,
+   flips, adoption, confidence change, directive type - is derived in merge_responses.py instead, so
+   the volunteer's file stays readable and there is exactly one place where each definition lives.
+   Also dropped: item_id (task_id identifies the item), displayed_conf (fixed at 0.92 by design),
+   human_noai_accuracy (a property of the item, re-joinable from the stimulus files) and volunteer_id
+   (duplicates `subject`, which is the ?pid= value when one is supplied).
+   Nothing identifying is collected in the first place: no IP (a browser cannot read its own), no user
+   agent, no screen size, and no wall-clock time finer than the session date. */
 const EXPORT_COLUMNS = [
-  // session
-  'subject','volunteer_id','session_date','domain','domain_source','lang','rotation','withdrawn',
-  // trial identity
-  'screen','arm','position','condition','task_id','item_id',
-  // stimulus properties
-  'ground_truth','ai_advice','displayed_conf','human_noai_accuracy',
-  // responses
+  'subject','session_date','domain','domain_source','lang','rotation',
+  'screen','arm','position','condition','task_id',
+  'ground_truth','ai_advice',
   'initial','conf_initial','rt_initial','final','conf_final','rt_final',
-  // derived outcomes
-  'initial_correct','flipped_to_wrong','adopted_wrong','changed','conf_change',
-  'directive_shown','directive_type',
-  // post-task
-  'perceived_ai_correct','response'
+  'response'
 ];
 function buildCsv(){
   const rows = jsPsych.data.get().values()
