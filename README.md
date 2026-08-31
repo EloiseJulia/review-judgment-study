@@ -12,7 +12,7 @@ Approved by the Ethics Committee of **Chang'an University** (approval no. **2026
 
 ## 立即开始
 
-**👉 [点击这里开始实验](https://EloiseJulia.github.io/review-judgment-study/)**
+**👉 [点击这里开始实验](https://EloiseJulia.github.io/user-study/)**
 
 不需要下载，不需要注册，不需要 clone 这个仓库。点开链接直接做就行。
 
@@ -74,7 +74,7 @@ review_study_beer_a1b2c3d4e5_2026-09-15.csv
 
 ## Start here
 
-**👉 [Click here to begin](https://EloiseJulia.github.io/review-judgment-study/)**
+**👉 [Click here to begin](https://EloiseJulia.github.io/user-study/)**
 
 No download, no sign-up, no need to clone this repository.
 
@@ -150,3 +150,4 @@ published here while data collection is open.
 
 Questions about the research should go to the Ethics Committee of Chang'an University, quoting approval
 number 20260831.
+
