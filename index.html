@@ -29,6 +29,16 @@
   .star.on { color:#f5a623; }
   .ai { text-align:left; background:#eef3f6; border:1px solid #cfd8dd; border-left:4px solid #5b8fa8;
         border-radius:6px; padding:12px 14px; margin:14px 0; font-size:15px; }
+  /* Deliberation pause before the advice appears. Identical in every condition, so it raises
+     realism without differentiating the framings. */
+  .aiwait { text-align:left; background:#f6f7f8; border:1px solid #e0e3e6; border-radius:6px;
+            padding:12px 14px; margin:14px 0; font-size:15px; color:#5a6570; }
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid #d8dfe4;
+             border-top-color:#5b8fa8; border-radius:50%; margin-right:9px; vertical-align:-2px;
+             animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .dots::after { content:''; animation:dots 1.2s steps(4,end) infinite; }
+  @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
   .ai.dark { background:#fdece9; border:1px solid #e6b3aa; border-left:5px solid #9e1b32; color:#3a1414; }
   .ai.dark b, .ai.dark strong { color:#9e1b32; }
   .directive { text-align:left; border-radius:6px; padding:12px 14px; margin:12px 0; font-size:15px;
@@ -106,6 +116,7 @@ const I18N = {
   warn2:'Please confirm your final answer.',
   warn2_conf:'Please rate your confidence (1\u20135 stars).',
   init_echo:'Your initial answer: <b>{ans}</b> (confidence {conf})',
+  ai_wait:'The AI is analysing this review',
   final_prompt:'You may keep or change your answer. Your <b>final</b> answer:',
   dir_agree:'\u2713 <b>Your judgment matches the AI.</b> This AI expert system reached the same conclusion '+
     'with high confidence after analysing millions of comparable reviews. When you and a high-accuracy system '+
@@ -188,6 +199,7 @@ const I18N = {
   warn2:'\u8bf7\u786e\u8ba4\u4f60\u7684\u6700\u7ec8\u7b54\u6848\u3002',
   warn2_conf:'\u8bf7\u4e3a\u4f60\u7684\u628a\u63e1\u6253\u5206\uff081\u20135 \u661f\uff09\u3002',
   init_echo:'\u4f60\u7684\u521d\u6b65\u5224\u65ad\uff1a<b>{ans}</b>\uff08\u7f6e\u4fe1\u5ea6 {conf}\uff09',
+  ai_wait:'AI \u6b63\u5728\u5206\u6790\u8fd9\u6761\u8bc4\u8bba',
   final_prompt:'\u4f60\u53ef\u4ee5\u4fdd\u6301\u6216\u4fee\u6539\u7b54\u6848\u3002\u4f60\u7684<b>\u6700\u7ec8</b>\u7b54\u6848\uff1a',
   dir_agree:'\u2713 <b>\u4f60\u7684\u5224\u65ad\u4e0e AI \u4e00\u81f4\u3002</b>\u8be5 AI \u4e13\u5bb6\u7cfb\u7edf'+
     '\u5728\u5206\u6790\u4e86\u6570\u767e\u4e07\u6761\u540c\u7c7b\u8bc4\u8bba\u540e\uff0c\u4ee5\u9ad8\u7f6e\u4fe1'+
@@ -407,6 +419,10 @@ const N_TRIALS = TRIALS.length;
 
 function warnBadInit(q){ q('#warn1').textContent = T('warn1'); }
 
+// Jittered so the pause does not feel mechanical. Constant across conditions by construction.
+// ~1.9 s median x 15 trials adds about half a minute to the session.
+function AI_WAIT_MS(){ return 1400 + Math.floor(Math.random() * 1000); }
+
 function trialHTML(it, cond, idx, arm){
   const tagExtra = DEBUG ? ` &nbsp;·&nbsp; <b>[${cond}${arm==='escalation'?'+dir':''}]</b>` : '';
   return `<div class="tag">${T('review_of')(idx+1, N_TRIALS)}${tagExtra}</div>` +
@@ -421,6 +437,9 @@ function trialHTML(it, cond, idx, arm){
       <button id="submit1" class="jspsych-btn">${T('submit1')}</button>
     </div>
     <div id="initEcho" class="echo" style="display:none"></div>
+    <div id="aiwait" class="aiwait" style="display:none">
+      <span class="spinner"></span><span>${T('ai_wait')}</span><span class="dots"></span>
+    </div>
     <div id="stage2" style="display:none">
       ${aiPanel(cond, it)}
       <div id="directive"></div>
@@ -441,9 +460,8 @@ TRIALS.forEach((tr, idx)=>{
     type: jsPsychHtmlButtonResponse,
     choices: [],
     stimulus: ()=>trialHTML(it, cond, idx, arm),
-    data: {screen:'trial', position: idx+1, arm: arm, task_id: it.task_id, item_id: it.item_id,
-           condition: cond, ground_truth: it.ground_truth_label, ai_advice: AIADVICE,
-           displayed_conf: it.displayed_ai_confidence, human_noai_accuracy: it.human_noai_accuracy},
+    data: {screen:'trial', position: idx+1, arm: arm, task_id: it.task_id,
+           condition: cond, ground_truth: it.ground_truth_label, ai_advice: AIADVICE},
     on_load: function(){
       const q = s => document.querySelector(s);
       wireStars('confI'); wireStars('confF');
@@ -470,9 +488,20 @@ TRIALS.forEach((tr, idx)=>{
           el.className = 'directive ' + (agree ? 'agree' : 'warn');
           el.innerHTML = agree ? T('dir_agree') : T('dir_warn');
         }
-        q('#stage2').style.display='block';
-        tS2 = performance.now();
-        q('#stage2').scrollIntoView({behavior:'smooth', block:'nearest'});
+        // A short pause before the advice appears, so it reads as something the system computed
+        // rather than a pre-written line. Identical in every condition and with neutral wording,
+        // because the expert-authority framing is what the dark condition manipulates: putting it
+        // in the loading text would raise the neutral baseline and compress the contrast we test.
+        q('#aiwait').style.display='block';
+        q('#aiwait').scrollIntoView({behavior:'smooth', block:'nearest'});
+        setTimeout(()=>{
+          q('#aiwait').style.display='none';
+          q('#stage2').style.display='block';
+          // the clock starts only once the advice is visible, so rt_final measures deliberation
+          // rather than the wait
+          tS2 = performance.now();
+          q('#stage2').scrollIntoView({behavior:'smooth', block:'nearest'});
+        }, AI_WAIT_MS());
       });
       q('#submit2').addEventListener('click', ()=>{
         const r = document.querySelector('input[name="final"]:checked');
@@ -480,16 +509,12 @@ TRIALS.forEach((tr, idx)=>{
         if(!r){ q('#warn2').textContent = T('warn2'); return; }
         if(cfv < 1){ q('#warn2').textContent = T('warn2_conf'); return; }
         const fin = r.value, confF = cfv, rt2 = performance.now()-tS2;
+        // Raw records only. initial_correct / flipped_to_wrong / adopted_wrong / changed /
+        // conf_change / directive_* are derived once in merge_responses.py, so there is no second
+        // copy of any definition that could drift.
         jsPsych.finishTrial({
           initial: init, conf_initial: confI, rt_initial: Math.round(rt1),
-          final: fin, conf_final: confF, rt_final: Math.round(rt2),
-          initial_correct: (init === it.ground_truth_label) ? 1 : 0,
-          adopted_wrong: (fin === AIADVICE) ? 1 : 0,
-          flipped_to_wrong: (init === it.ground_truth_label && fin === AIADVICE) ? 1 : 0,
-          changed: (fin !== init) ? 1 : 0,
-          conf_change: confF - confI,
-          directive_shown: showDirective ? 1 : 0,
-          directive_type: showDirective ? (init === AIADVICE ? 'agree' : 'warn') : 'none'
+          final: fin, conf_final: confF, rt_final: Math.round(rt2)
         });
       });
     }
