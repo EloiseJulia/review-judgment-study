@@ -317,22 +317,30 @@ function hashInt(s){
   return h >>> 0;
 }
 const DOMAIN_PARAM = URLP.get('domain');
-// One package serves everyone. Domain stays between-subjects, but with no server there is no way to
-// coordinate an exact quota, so each session derives its own from its ID. Simulation at N=80 shows
-// this costs H1 nothing (power .69 random vs .67 fixed) and leaves the beer group at 40 +/- 4. The
-// draw is recorded in `domain_source`, so a drifting balance is visible in the returned data and can
-// be corrected by sending the last few volunteers a domain-pinned link (?domain=beer / ?domain=amzbook).
+// Rotation and domain are both derived from one hash of the session ID, but from DISJOINT parts of
+// it: rotation is the remainder mod 12, domain is the parity of the quotient. That makes them
+// independent by construction rather than by luck.
+//
+// This matters more than it looks. FNV-1a's lowest bit is just the XOR-parity of the input
+// characters, because its prime is odd and odd multiplication preserves bit 0. The earlier
+// `hash(id + '|domain') % 2` therefore read that parity bit — and since 12 is even, `hash % 12`
+// carries the same parity, so domain came out perfectly determined by whether rotation was odd.
+// Every beer participant got an even rotation and every amzbook participant an odd one, which left
+// half the items unable to appear in placebo at all and made item difficulty confounded with
+// condition. Suffixing the string did not help: "|domain" happens to contain an even number of
+// odd-valued characters, so it left bit 0 untouched.
+const SUBJECT_HASH = hashInt(SUBJECT);
 const DOMAIN_SOURCE = ['beer','amzbook'].includes(DOMAIN_PARAM) ? 'url' : 'random';
 const DOMAIN = DOMAIN_SOURCE === 'url'
   ? DOMAIN_PARAM
-  : (hashInt(SUBJECT + '|domain') % 2 ? 'amzbook' : 'beer');
+  : (Math.floor(SUBJECT_HASH / 12) % 2 ? 'amzbook' : 'beer');
 // Participant ID deterministically selects one of the item->condition rotations.
 // There are as many rotations as main items (see LATIN_ALLOC below), so every item
 // appears in every condition slot equally often across participants.
 const N_ROTATIONS = 12;
 const ROTATION = URLP.has('rotation')
   ? ((+URLP.get('rotation') % N_ROTATIONS) + N_ROTATIONS) % N_ROTATIONS
-  : hashInt(SUBJECT) % N_ROTATIONS;
+  : SUBJECT_HASH % N_ROTATIONS;
 jsPsych.data.addProperties({
   domain: DOMAIN, domain_source: DOMAIN_SOURCE, rotation: ROTATION, lang: null, subject: SUBJECT,
   volunteer_id: PID, withdrawn: 0,
