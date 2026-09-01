@@ -554,7 +554,12 @@ tl.push({ timeline: body, conditional_function: ()=> !DECLINED });
    Recruitment is unpaid volunteers over a shared link, with no server and no repository, so the
    only copy of the data is the file the participant returns. A withdrawing participant's answers
    are never written out; they get a marker file instead, so a withdrawal is still auditable. */
-function csvEscape(v){ return `"${String(v === null || v === undefined ? '' : v).replace(/"/g,'""')}"`; }
+function csvEscape(v){
+  // The pre-task survey arrives as an object; String() would silently render it "[object Object]"
+  // and lose all six answers, so objects are serialised as JSON.
+  if (v && typeof v === 'object') { try { v = JSON.stringify(v); } catch(e) { v = ''; } }
+  return `"${String(v === null || v === undefined ? '' : v).replace(/"/g,'""')}"`;
+}
 function withdrawalRecordCsv(){
   const cols = ['subject','domain','withdrawn','withdrawn_date'];
   const vals = [SUBJECT, DOMAIN, 1, new Date().toISOString().slice(0,10)];
